@@ -1,8 +1,8 @@
 # loading/database_operations.py
 import psycopg2
 from psycopg2 import sql
-from transformation.process_data import infer_column_type, flatten_json, process_boolean_values
-
+from transformation.process_data import infer_column_type, flatten_json, process_boolean_values, create_nested_table
+import Json
 
 def add_missing_columns(conn, table_name, record):
     """Dynamically add missing columns to the table based on the flattened record."""
@@ -30,7 +30,6 @@ def add_missing_columns(conn, table_name, record):
                     conn.rollback()
 
 def insert_or_update_data(conn, table_name, data):
-    """Insert or update records dynamically into the table."""
     with conn.cursor() as cursor:
         for record in data:
             record_id = record.get("id")
@@ -38,22 +37,21 @@ def insert_or_update_data(conn, table_name, data):
                 print("Skipping record without 'id'.")
                 continue
 
-            # Flatten the record and process boolean values
             flattened_record = flatten_json(record)
             flattened_record = process_boolean_values(flattened_record)
-
-            # Add any missing columns dynamically
             add_missing_columns(conn, table_name, flattened_record)
 
-            # Prepare column names and values
+            # Process nested columns
+            process_nested_columns(conn, table_name, record)
+
             columns = []
             values = []
             update_pairs = []
 
             for key, value in flattened_record.items():
-                if key != "id":  # Skip id in the SET clause
+                if key != "id":
                     columns.append(sql.Identifier(key.lower()))
-                    values.append(value)  # Use value directly (which is now JSONB if needed)
+                    values.append(value)
                     update_pairs.append(
                         sql.SQL("{} = EXCLUDED.{}").format(
                             sql.Identifier(key.lower()),
@@ -61,7 +59,6 @@ def insert_or_update_data(conn, table_name, data):
                         )
                     )
 
-            # Construct the query
             query = sql.SQL(""" 
                 INSERT INTO {table} ({id_col}, {columns})
                 VALUES (%s, {placeholders})
@@ -75,7 +72,6 @@ def insert_or_update_data(conn, table_name, data):
                 updates=sql.SQL(', ').join(update_pairs)
             )
 
-            # Ensure JSON data is passed as JSONB (use Json to handle JSONB columns)
             processed_values = [
                 Json(value) if isinstance(value, (dict, list)) else value
                 for value in values
@@ -89,3 +85,18 @@ def insert_or_update_data(conn, table_name, data):
                 conn.rollback()
 
         conn.commit()
+
+    def process_nested_columns(conn, table_name, record, parent_key='id'):
+        """
+        Process nested JSON fields and create corresponding tables.
+        """
+        nested_data = {}
+        for key, value in record.items():
+            if isinstance(value, (dict, list)):  # Identify nested JSON columns
+                nested_data[key] = value
+
+        # For each nested column, create and populate a child table
+        for nested_column, data in nested_data.items():
+            parent_id = record.get(parent_key)
+            if parent_id:
+                create_nested_table(conn, table_name, nested_column, [(parent_id, data)])

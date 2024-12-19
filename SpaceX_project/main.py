@@ -4,13 +4,14 @@ from extraction.fetch_data import fetch_data
 from extraction.save_data import save_data_to_file
 from loading.create_table import create_table_if_not_exists
 from loading.database_operations import insert_or_update_data
+import os
 
 DB_PARAMS = {
-    'dbname': 'spacex',
-    'user': 'postgres',
-    'password': 'draks317',
-    'host': '127.0.0.1',
-    'port': '5432'
+    'dbname': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'port': os.getenv('DB_PORT')
 }
 
 SPACEX_API_URL = "https://api.spacexdata.com/v4/"
