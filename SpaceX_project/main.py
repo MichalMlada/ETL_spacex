@@ -4,8 +4,11 @@ from extraction.fetch_data import fetch_data
 from extraction.save_data import save_data_to_file
 from loading.create_table import create_table_if_not_exists
 from loading.database_operations import insert_or_update_data
+from transformation.table_splitter import process_nested_json
 import os
+from dotenv import load_dotenv
 
+load_dotenv(dotenv_path='.env')
 DB_PARAMS = {
     'dbname': os.getenv('DB_NAME'),
     'user': os.getenv('DB_USER'),
@@ -13,6 +16,8 @@ DB_PARAMS = {
     'host': os.getenv('DB_HOST'),
     'port': os.getenv('DB_PORT')
 }
+
+
 
 SPACEX_API_URL = "https://api.spacexdata.com/v4/"
 
@@ -47,6 +52,7 @@ def main():
 
         create_table_if_not_exists(conn, table_name)
         fetch_and_process_data(source_url, table_name, save_path, conn)
+    process_nested_json(conn)
 
     conn.close()
 

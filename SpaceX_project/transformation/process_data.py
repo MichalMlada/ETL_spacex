@@ -54,7 +54,7 @@ def infer_column_type(value):
     elif isinstance(value, bool):
         return "BOOLEAN"
     elif isinstance(value, dict) or isinstance(value, list):
-        return "jsonb"  # Ensure dicts and lists are stored as jsonb
+        return "JSONB"
     elif value is None:
         return "TEXT"
     else:
@@ -82,45 +82,3 @@ def remove_data_column_if_exists(conn, table_name):
             except Exception as e:
                 print(f"Error dropping 'data' column: {e}")
                 conn.rollback()
-    
-
-def create_nested_table(conn, parent_table, nested_column, nested_data, parent_key='id'):
-    """
-    Create a new table for a nested JSON column and insert data.
-    """
-    child_table = f"{parent_table}_{nested_column}"
-    with conn.cursor() as cursor:
-        # Create child table if it doesn't exist
-        cursor.execute(sql.SQL("""
-            CREATE TABLE IF NOT EXISTS {} (
-                {} TEXT PRIMARY KEY,
-                {} TEXT REFERENCES {}({}),
-                data JSONB
-            );
-        """).format(
-            sql.Identifier(child_table),
-            sql.Identifier('child_id'),
-            sql.Identifier(f'{parent_table}_id'),
-            sql.Identifier(parent_table),
-            sql.Identifier(parent_key)
-        ))
-        conn.commit()
-        print(f"Created table: {child_table}")
-
-        # Insert data into the child table
-        for parent_id, nested_item in nested_data:
-            child_id = str(uuid.uuid4())
-            try:
-                cursor.execute(sql.SQL("""
-                    INSERT INTO {} (child_id, {}_id, data)
-                    VALUES (%s, %s, %s);
-                """).format(
-                    sql.Identifier(child_table),
-                    sql.Identifier(parent_table)
-                ), [child_id, parent_id, Json(nested_item)])
-            except Exception as e:
-                print(f"Error inserting into {child_table}: {e}")
-                conn.rollback()
-
-        conn.commit()
-        print(f"Data inserted into {child_table}")
